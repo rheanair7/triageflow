@@ -1,0 +1,1057 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TriageFlow — incident command</title>
+<style>
+:root {
+  --bg: #1a1f2e; --panel: #242938; --panel-edge: #323a4f;
+  --ink: #f0f4fa; --muted: #d0d8e6; --dim: #b0bbc9; --wire: #323a4f;
+  --live: #36d399; --warn: #f5a623; --crit: #ff6b6b; --beam: #6cb0ff;
+  --mono: "SF Mono","JetBrains Mono","Fira Code",ui-monospace,monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--ink); font-family: var(--mono);
+       font-size: 14px; line-height: 1.65; min-height: 100vh; padding: 28px 24px 80px;
+       background-image: radial-gradient(circle at 50% 0%, #1e2640 0%, var(--bg) 65%); }
+.wrap { max-width: 1120px; margin: 0 auto; }
+
+/* Header */
+header { display: flex; align-items: baseline; justify-content: space-between;
+         border-bottom: 1px solid var(--wire); padding-bottom: 14px; margin-bottom: 24px; }
+.brand { font-size: 20px; letter-spacing: 2px; font-weight: 600; }
+.brand b { color: var(--live); }
+.sub { color: var(--muted); font-size: 13px; letter-spacing: 1px; text-transform: uppercase; }
+
+/* Grid */
+.grid { display: grid; grid-template-columns: 340px 1fr; gap: 20px; }
+@media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+
+/* Panels */
+.panel { background: var(--panel); border: 1px solid var(--panel-edge); border-radius: 6px; padding: 20px; }
+.panel h2 { font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase;
+            color: var(--muted); margin-bottom: 14px; font-weight: 600; }
+
+/* Input side */
+.modes { display: flex; gap: 8px; margin-bottom: 12px; }
+.mode-btn { flex: 1; background: #1c2130; border: 1px solid var(--wire); color: var(--muted);
+            padding: 8px; border-radius: 4px; font-family: var(--mono); font-size: 13px;
+            letter-spacing: .5px; cursor: pointer; transition: all .15s; text-transform: uppercase; }
+.mode-btn:hover { border-color: var(--dim); color: var(--ink); }
+.mode-btn.active { border-color: var(--live); color: var(--live); background: #1a2a23; }
+.drop { border: 1px dashed var(--dim); border-radius: 4px; padding: 24px 14px; text-align: center;
+        cursor: pointer; transition: border-color .15s, background .15s; color: var(--muted); font-size: 13px; }
+.drop:hover, .drop.over { border-color: var(--live); background: #1c2130; color: var(--ink); }
+.preview { margin-top: 12px; border: 1px solid var(--wire); border-radius: 4px; overflow: hidden; display: none; }
+.preview img { width: 100%; display: block; }
+#logbox { margin-top: 12px; width: 100%; background: #1c2130; border: 1px solid var(--wire);
+          border-radius: 4px; color: var(--ink); font-family: var(--mono); font-size: 14px;
+          padding: 10px; resize: vertical; line-height: 1.5; }
+#logbox::placeholder { color: var(--dim); }
+#logbox:focus { outline: none; border-color: var(--beam); }
+.run { margin-top: 14px; width: 100%; background: var(--live); color: #04110a; border: 0; padding: 12px;
+       border-radius: 4px; font-family: var(--mono); font-weight: 600; font-size: 13px; letter-spacing: 1px;
+       cursor: pointer; text-transform: uppercase; transition: opacity .15s; }
+.run:disabled { opacity: .35; cursor: not-allowed; }
+.clock { margin-top: 18px; text-align: center; }
+.clock .n { font-size: 40px; font-weight: 600; letter-spacing: -1px; color: var(--live); }
+.clock .u { font-size: 14px; color: var(--muted); letter-spacing: 1px; }
+.clock .c { font-size: 13px; color: var(--dim); margin-top: 2px; }
+
+/* Reply (support mode) */
+.reply { margin-top: 12px; border: 1px solid var(--live); border-radius: 4px; padding: 14px;
+         background: #1a2820; display: none; }
+.reply.show { display: block; }
+.reply .lbl { font-size: 12px; letter-spacing: 1px; text-transform: uppercase; color: var(--live); margin-bottom: 6px; }
+.reply .txt { font-size: 14px; color: var(--ink); white-space: pre-wrap; line-height: 1.6; }
+
+/* Pipeline stages */
+.pipe { display: flex; flex-direction: column; gap: 12px; }
+.stage { position: relative; padding: 16px 16px 16px 50px; border: 1px solid var(--wire);
+         border-radius: 6px; background: #1c2130; opacity: .5;
+         transition: opacity .3s, border-color .3s, box-shadow .3s; }
+.stage.active { opacity: 1; border-color: var(--beam); box-shadow: 0 0 0 1px var(--beam), 0 0 24px -8px var(--beam); }
+.stage.done { opacity: 1; border-color: var(--panel-edge); }
+.stage .node { position: absolute; left: 14px; top: 16px; width: 22px; height: 22px; border-radius: 50%;
+               border: 1px solid var(--dim); display: flex; align-items: center; justify-content: center;
+               font-size: 11px; color: var(--muted); }
+.stage.active .node { border-color: var(--beam); color: var(--beam); }
+.stage.done .node { border-color: var(--live); color: var(--live); }
+.stage .name { font-size: 13px; font-weight: 600; letter-spacing: .3px; }
+.stage .role { font-size: 12px; color: var(--muted); }
+.stage .body { margin-top: 8px; font-size: 14px; color: var(--ink); display: none; }
+.stage.active .body, .stage.done .body { display: block; }
+.stage .ms { position: absolute; right: 14px; top: 16px; font-size: 12px; color: var(--dim); }
+.stage.done .ms { color: var(--live); }
+
+.pill { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 10px; letter-spacing: .5px;
+        text-transform: uppercase; border: 1px solid currentColor; }
+.sev-low { color: var(--live); } .sev-medium { color: var(--warn); }
+.sev-high { color: var(--crit); } .sev-critical { color: var(--crit); }
+.conf b.up { color: var(--live); } .conf b.flat { color: var(--warn); }
+.rb { font-size: 14px; color: var(--muted); padding: 3px 0; }
+.rb::before { content: "▪ "; color: var(--beam); }
+.qa { border-left: 2px solid var(--wire); padding-left: 10px; margin: 6px 0; }
+.qa .q { color: var(--beam); font-size: 14px; }
+.qa .a { color: var(--muted); font-size: 14px; }
+.plan .step { padding: 5px 0 5px 24px; position: relative; font-size: 14px; border-bottom: 1px solid var(--wire); }
+.plan .step b { position: absolute; left: 0; color: var(--live); }
+.rationale { margin-top: 10px; font-size: 13px; color: var(--muted); font-style: italic; }
+.verdict { margin-top: 12px; padding: 10px 14px; border-radius: 4px; font-size: 13px;
+           border: 1px solid var(--wire); color: var(--muted); display: none; }
+.verdict.show { display: block; }
+.verdict.rose { border-color: var(--live); color: var(--live); }
+.verdict.flat { border-color: var(--warn); color: var(--warn); }
+.copy-btn { margin-top: 10px; background: transparent; border: 1px solid var(--dim); color: var(--muted);
+            padding: 5px 14px; border-radius: 4px; font-family: var(--mono); font-size: 11px;
+            letter-spacing: .5px; cursor: pointer; text-transform: uppercase; transition: all .15s; display: none; }
+.copy-btn:hover { border-color: var(--ink); color: var(--ink); }
+.copy-btn.show { display: inline-block; }
+
+/* Agent Wire */
+.wire-section { margin-top: 18px; border-top: 1px solid var(--wire); padding-top: 14px; display: none; }
+.wire-section.show { display: block; }
+.wire-hdr { font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+.wire-msg { margin: 6px 0; font-size: 13px; }
+.wire-route { color: var(--beam); }
+.wire-label { color: var(--muted); margin-left: 6px; }
+.wire-payload { margin-top: 3px; padding-left: 16px; color: var(--dim); font-size: 13px; }
+.wire-note { font-size: 12px; color: var(--dim); font-style: italic; padding-left: 16px; }
+
+/* Benchmark */
+.bench-panel { margin-top: 20px; }
+.bench-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.bench-grid { display: grid; grid-template-columns: 1fr 50px 1fr; gap: 12px; align-items: center; }
+.bench-card { padding: 20px; border: 1px solid var(--wire); border-radius: 6px; text-align: center;
+              transition: border-color .3s; }
+.bench-card.done-c { border-color: var(--live); }
+.bench-card.done-g { border-color: var(--warn); }
+.bench-name { font-size: 13px; color: var(--muted); margin-bottom: 10px; letter-spacing: .3px; }
+.bench-time { font-size: 34px; font-weight: 600; color: var(--dim); letter-spacing: -1px; transition: color .3s; }
+.bench-time.done-c { color: var(--live); }
+.bench-time.done-g { color: var(--warn); }
+.bench-unit { font-size: 15px; font-weight: 400; }
+.bench-tag { font-size: 12px; color: var(--dim); margin-top: 6px; }
+.bench-vs { text-align: center; font-size: 14px; font-weight: 600; color: var(--dim); }
+.bench-speedup { text-align: center; margin-top: 16px; display: none; }
+.speedup-num { font-size: 30px; font-weight: 600; color: var(--live); }
+.speedup-label { font-size: 13px; color: var(--muted); margin-top: 4px; }
+.speedup-note { font-size: 12px; color: var(--dim); margin-top: 4px; font-style: italic; white-space: normal; word-break: break-word; overflow: visible; }
+.bench-run { background: transparent; border: 1px solid var(--beam); color: var(--beam);
+             padding: 8px 16px; border-radius: 4px; font-family: var(--mono); font-size: 13px;
+             letter-spacing: .5px; cursor: pointer; text-transform: uppercase; transition: all .15s; }
+.bench-run:hover { background: var(--beam); color: var(--bg); }
+.bench-run:disabled { opacity: .4; cursor: not-allowed; }
+
+/* Accordion sections */
+.accordion { margin-top: 16px; border: 1px solid var(--panel-edge); border-radius: 6px; overflow: hidden; }
+.acc-btn { width: 100%; background: var(--panel); border: 0; color: var(--muted); padding: 13px 18px;
+           font-family: var(--mono); font-size: 13px; letter-spacing: 1px; text-transform: uppercase;
+           cursor: pointer; text-align: left; display: flex; justify-content: space-between; align-items: center;
+           transition: color .15s; }
+.acc-btn:hover { color: var(--ink); }
+.acc-body { background: var(--panel); padding: 0 18px 18px; display: none; border-top: 1px solid var(--wire); }
+.acc-body.open { display: block; }
+
+/* Settings */
+.settings-row { display: flex; gap: 8px; align-items: center; margin-top: 14px; flex-wrap: wrap; }
+.settings-label { font-size: 13px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted);
+                  margin-top: 16px; margin-bottom: 6px; }
+.settings-input { flex: 1; min-width: 200px; background: #1c2130; border: 1px solid var(--wire);
+                  color: var(--ink); font-family: var(--mono); font-size: 12px; padding: 8px 10px;
+                  border-radius: 4px; }
+.settings-input:focus { outline: none; border-color: var(--beam); }
+.btn-sm { background: transparent; border: 1px solid var(--dim); color: var(--muted); padding: 7px 13px;
+          border-radius: 4px; font-family: var(--mono); font-size: 13px; letter-spacing: .5px;
+          cursor: pointer; text-transform: uppercase; white-space: nowrap; transition: all .15s; }
+.btn-sm:hover { border-color: var(--ink); color: var(--ink); }
+.btn-sm.live { border-color: var(--live); color: var(--live); }
+.btn-sm.warn { border-color: var(--crit); color: var(--crit); }
+.status-line { font-size: 13px; color: var(--muted); margin-top: 6px; }
+.status-line.ok { color: var(--live); }
+.status-line.err { color: var(--crit); }
+
+/* KB entries */
+.kb-entry { display: flex; align-items: flex-start; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--wire); }
+.kb-entry:last-child { border-bottom: 0; }
+.kb-title { font-size: 14px; color: var(--ink); flex: 1; }
+.kb-kws { font-size: 12px; color: var(--dim); margin-top: 2px; }
+.kb-del { background: transparent; border: 0; color: var(--dim); cursor: pointer; font-size: 14px;
+          padding: 0 4px; transition: color .15s; }
+.kb-del:hover { color: var(--crit); }
+.kb-form { margin-top: 12px; display: none; border: 1px solid var(--wire); border-radius: 4px; padding: 14px; }
+.kb-form.show { display: block; }
+.kb-form input, .kb-form textarea { width: 100%; background: #1c2130; border: 1px solid var(--wire);
+  color: var(--ink); font-family: var(--mono); font-size: 13px; padding: 8px; border-radius: 4px; margin-bottom: 6px; }
+.kb-form input:focus, .kb-form textarea:focus { outline: none; border-color: var(--beam); }
+.kb-form textarea { resize: vertical; min-height: 70px; }
+.kb-form-btns { display: flex; gap: 8px; margin-top: 4px; }
+
+/* History table */
+.hist-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 12px; }
+.hist-table th { text-align: left; color: var(--muted); font-weight: 400; letter-spacing: .5px;
+                 text-transform: uppercase; font-size: 12px; padding: 5px 8px; border-bottom: 1px solid var(--wire); }
+.hist-table td { padding: 7px 8px; border-bottom: 1px solid var(--wire); color: var(--muted); }
+.hist-table tr:hover td { color: var(--ink); }
+.hist-table td:first-child { color: var(--dim); }
+.hist-ms { color: var(--live); font-variant-numeric: tabular-nums; }
+.hist-empty { color: var(--dim); font-size: 13px; font-style: italic; padding: 12px 0; }
+
+.hint { color: var(--dim); font-size: 12px; margin-top: 8px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">TRIAGE<b>FLOW</b></div>
+    <div class="sub">Gemma 4 31B &middot; Cerebras &middot; multi-agent incident triage</div>
+  </header>
+
+  <!-- Main grid -->
+  <div class="grid">
+    <!-- Left: input -->
+    <div>
+      <div class="panel">
+        <h2 id="panel-title">Incident evidence</h2>
+        <div class="modes" id="modes">
+          <button class="mode-btn active" data-mode="incident">Incident response</button>
+          <button class="mode-btn" data-mode="support">Customer support</button>
+        </div>
+        <div class="drop" id="drop">Drop image or video here · or click to choose</div>
+        <input type="file" id="file" accept="image/*,video/mp4,video/quicktime,video/webm" hidden>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn-sm" style="flex:1" onclick="document.getElementById('file').click()">📷 Image</button>
+          <button class="btn-sm live" style="flex:1" onclick="document.getElementById('file').click()">▶ Video (.mp4 / .mov)</button>
+        </div>
+        <div class="preview" id="preview"><img id="pimg"></div>
+        <div style="margin-top:12px;font-size:13px;color:var(--dim);letter-spacing:.5px;text-transform:uppercase">Comparison image (optional — before/after)</div>
+        <div class="drop" id="drop2" style="margin-top:6px;padding:14px;font-size:13px">Drop a second image for before/after comparison</div>
+        <input type="file" id="file2" accept="image/*" hidden>
+        <div class="preview" id="preview2"><img id="pimg2"></div>
+        <div id="demo-section" style="margin-top:14px">
+          <div style="font-size:13px;letter-spacing:.5px;text-transform:uppercase;color:var(--dim);margin-bottom:8px">or try a demo scenario</div>
+          <div id="demo-list" style="display:flex;flex-direction:column;gap:5px"></div>
+        </div>
+        <textarea id="logbox" rows="5" placeholder="Optional: paste a log excerpt, stack trace, or deploy note. Agents correlate it with the image to find root cause."></textarea>
+        <button class="run" id="run" disabled>Run triage</button>
+        <div class="clock">
+          <div class="n"><span id="clock">0</span><span style="font-size:16px"> ms</span></div>
+          <div class="u">total Gemma 4 inference</div>
+          <div class="c">four agents &middot; one wafer-scale engine</div>
+        </div>
+        <div class="hint">Image sent only to Cerebras for inference. Nothing stored externally.</div>
+      </div>
+    </div>
+
+    <!-- Right: pipeline + wire -->
+    <div class="panel">
+      <h2>Agent pipeline</h2>
+      <div class="pipe" id="pipe">
+        <div class="stage" data-stage="triage">
+          <div class="node">1</div>
+          <div class="name">Triage agent <span class="role">&middot; vision</span></div>
+          <div class="ms" data-ms></div>
+          <div class="body" data-body>Awaiting evidence.</div>
+        </div>
+        <div class="stage" data-stage="retrieval">
+          <div class="node">2</div>
+          <div class="name">Retrieval agent <span class="role">&middot; Gemma semantic</span></div>
+          <div class="ms" data-ms></div>
+          <div class="body" data-body></div>
+        </div>
+        <div class="stage" data-stage="resolution">
+          <div class="node">3</div>
+          <div class="name">Resolution agent <span class="role">&middot; synthesis</span></div>
+          <div class="ms" data-ms></div>
+          <div class="body" data-body></div>
+        </div>
+        <div class="stage" data-stage="diagnostic">
+          <div class="node">4</div>
+          <div class="name">Diagnostic agent <span class="role">&middot; vision re-exam</span></div>
+          <div class="ms" data-ms></div>
+          <div class="body" data-body>Only engaged when resolution is uncertain.</div>
+        </div>
+      </div>
+
+      <div class="verdict" id="verdict"></div>
+      <div class="reply" id="reply">
+        <div class="lbl">Draft reply to customer</div>
+        <div class="txt" id="replytxt"></div>
+      </div>
+      <button class="copy-btn" id="copy-btn" onclick="copyResult()">Copy result JSON</button>
+      <button class="copy-btn" id="dl-btn" onclick="downloadReport()" style="margin-left:8px">Download report</button>
+
+      <!-- Agent Wire -->
+      <div class="wire-section" id="wire-section">
+        <div class="wire-hdr">Agent Wire — live message passing</div>
+        <div id="wire-log"></div>
+      </div>
+
+      <!-- Webhook status -->
+      <div id="webhook-status-inline" style="display:none;margin-top:10px;font-size:10px;"></div>
+    </div>
+  </div>
+
+  <!-- Benchmark panel -->
+  <div class="panel bench-panel">
+    <div class="bench-top">
+      <h2 style="margin:0">Speed Benchmark — Cerebras vs GPU</h2>
+      <button class="bench-run" id="bench-btn" onclick="runBenchmark()">Run Benchmark</button>
+    </div>
+    <div class="bench-grid">
+      <div class="bench-card" id="bench-c">
+        <div class="bench-name">Cerebras &middot; Gemma 4 31B<br><span style="color:var(--dim);font-size:9px">Wafer-Scale Engine</span></div>
+        <div class="bench-time" id="c-time">—<span class="bench-unit"> ms</span></div>
+        <div class="bench-tag" id="c-tag">ready</div>
+      </div>
+      <div class="bench-vs">VS</div>
+      <div class="bench-card" id="bench-g">
+        <div class="bench-name" id="g-name">GPU Provider<br><span style="color:var(--dim);font-size:9px" id="g-sub">Set GROQ_API_KEY or FIREWORKS_API_KEY to compare</span></div>
+        <div class="bench-time" id="g-time">—<span class="bench-unit"> ms</span></div>
+        <div class="bench-tag" id="g-tag">awaiting GPU key</div>
+      </div>
+    </div>
+    <div class="bench-speedup" id="bench-speedup">
+      <div class="speedup-num"><span id="speedup-val">—</span>× faster</div>
+      <div class="speedup-label" id="speedup-label">Cerebras · Gemma 4 31B vs GPU provider</div>
+      <div class="speedup-note" id="speedup-note"></div>
+    </div>
+  </div>
+
+  <!-- Settings accordion -->
+  <div class="accordion">
+    <button class="acc-btn" onclick="toggleAcc('settings')">
+      <span>Settings</span><span id="acc-settings-icon">▶</span>
+    </button>
+    <div class="acc-body" id="acc-settings-body">
+      <!-- Webhook -->
+      <div class="settings-label">Outbound Webhook (Slack / PagerDuty / any URL)</div>
+      <div class="settings-row">
+        <input class="settings-input" id="wh-url" placeholder="https://hooks.slack.com/...">
+        <button class="btn-sm" onclick="saveWebhook()">Save</button>
+        <button class="btn-sm" onclick="testWebhook()">Test</button>
+        <button class="btn-sm warn" onclick="clearWebhook()">Clear</button>
+      </div>
+      <div class="status-line" id="wh-status"></div>
+
+      <!-- Custom KB -->
+      <div class="settings-label" style="margin-top:20px">Custom Knowledge Base entries</div>
+      <div id="kb-list"><div class="hist-empty">No custom entries yet.</div></div>
+      <button class="btn-sm live" style="margin-top:10px" onclick="toggleKbForm()">+ Add entry</button>
+      <div class="kb-form" id="kb-form">
+        <input id="kb-title" placeholder="Title (e.g. Redis cluster failover)">
+        <input id="kb-keywords" placeholder="Keywords, comma-separated (e.g. redis, cache, cluster, failover)">
+        <textarea id="kb-content" placeholder="Resolution content — symptoms and fix steps..."></textarea>
+        <div class="kb-form-btns">
+          <button class="btn-sm live" onclick="addKbEntry()">Add</button>
+          <button class="btn-sm" onclick="toggleKbForm()">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- History accordion -->
+  <div class="accordion">
+    <button class="acc-btn" onclick="toggleAcc('history')">
+      <span>Triage History</span><span id="acc-history-icon">▶</span>
+    </button>
+    <div class="acc-body" id="acc-history-body">
+      <div style="display:flex;justify-content:flex-end;margin-top:14px">
+        <button class="btn-sm warn" onclick="clearHistory()">Clear history</button>
+      </div>
+      <div id="history-content"><div class="hist-empty">No history yet.</div></div>
+    </div>
+  </div>
+
+  <!-- Architecture diagram -->
+  <div class="panel" style="margin-top:16px">
+    <h2>Agent Architecture</h2>
+    <svg viewBox="0 0 820 130" width="100%" style="display:block;max-width:820px;margin:0 auto" font-family="SF Mono,JetBrains Mono,Fira Code,ui-monospace,monospace" font-size="12">
+      <!-- Arrow marker -->
+      <defs>
+        <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L8,3 z" fill="#8492a8"/>
+        </marker>
+        <marker id="arr-live" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L8,3 z" fill="#36d399"/>
+        </marker>
+      </defs>
+
+      <!-- Upload box -->
+      <rect x="4" y="38" width="80" height="44" rx="4" fill="#1c2130" stroke="#323a4f" stroke-width="1"/>
+      <text x="44" y="57" text-anchor="middle" fill="#8d97aa">Upload</text>
+      <text x="44" y="72" text-anchor="middle" fill="#8492a8" font-size="9.5">image/video</text>
+
+      <!-- Triage -->
+      <rect x="118" y="20" width="110" height="44" rx="4" fill="#1c2130" stroke="#6cb0ff" stroke-width="1"/>
+      <text x="173" y="39" text-anchor="middle" fill="#6cb0ff" font-weight="600">Triage Agent</text>
+      <text x="173" y="55" text-anchor="middle" fill="#8492a8" font-size="9.5">vision · classify</text>
+
+      <!-- Retrieval -->
+      <rect x="262" y="20" width="120" height="44" rx="4" fill="#1c2130" stroke="#6cb0ff" stroke-width="1"/>
+      <text x="322" y="39" text-anchor="middle" fill="#6cb0ff" font-weight="600">Retrieval Agent</text>
+      <text x="322" y="55" text-anchor="middle" fill="#8492a8" font-size="9.5">Gemma semantic KB</text>
+
+      <!-- Resolution pass 1 -->
+      <rect x="416" y="20" width="124" height="44" rx="4" fill="#1c2130" stroke="#6cb0ff" stroke-width="1"/>
+      <text x="478" y="39" text-anchor="middle" fill="#6cb0ff" font-weight="600">Resolution Agent</text>
+      <text x="478" y="55" text-anchor="middle" fill="#8492a8" font-size="9.5">vision · action plan</text>
+
+      <!-- High confidence out -->
+      <line x1="540" y1="42" x2="590" y2="42" stroke="#36d399" stroke-width="1.5" marker-end="url(#arr-live)"/>
+      <rect x="592" y="28" width="82" height="28" rx="4" fill="#1a2820" stroke="#36d399" stroke-width="1"/>
+      <text x="633" y="47" text-anchor="middle" fill="#36d399" font-size="10">✓ Done</text>
+
+      <!-- Low confidence down arrow -->
+      <line x1="478" y1="64" x2="478" y2="88" stroke="#8492a8" stroke-width="1.5" marker-end="url(#arr)"/>
+      <text x="490" y="82" fill="#8492a8" font-size="9.5">low conf</text>
+
+      <!-- Diagnostic -->
+      <rect x="416" y="90" width="124" height="36" rx="4" fill="#1c2130" stroke="#f5a623" stroke-width="1"/>
+      <text x="478" y="106" text-anchor="middle" fill="#f5a623" font-weight="600">Diagnostic Agent</text>
+      <text x="478" y="120" text-anchor="middle" fill="#8492a8" font-size="9.5">vision · re-examine</text>
+
+      <!-- Diagnostic back to resolution -->
+      <path d="M540,108 Q580,108 580,42 L540,42" fill="none" stroke="#8492a8" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+      <text x="600" y="90" fill="#8492a8" font-size="9.5">re-synthesize</text>
+
+      <!-- Arrows between main boxes -->
+      <line x1="84" y1="60" x2="116" y2="42" stroke="#8492a8" stroke-width="1.5" marker-end="url(#arr)"/>
+      <line x1="228" y1="42" x2="260" y2="42" stroke="#8492a8" stroke-width="1.5" marker-end="url(#arr)"/>
+      <line x1="382" y1="42" x2="414" y2="42" stroke="#8492a8" stroke-width="1.5" marker-end="url(#arr)"/>
+    </svg>
+    <div style="margin-top:10px;font-size:13px;color:var(--dim);text-align:center">
+      Gemma 4 31B on Cerebras · all agents run on the wafer-scale engine · confidence loop fires when resolution &lt; high
+    </div>
+  </div>
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+const file   = document.getElementById('file');
+const drop   = document.getElementById('drop');
+const preview= document.getElementById('preview');
+const pimg   = document.getElementById('pimg');
+const file2   = document.getElementById('file2');
+const drop2   = document.getElementById('drop2');
+const preview2= document.getElementById('preview2');
+const pimg2   = document.getElementById('pimg2');
+const runBtn = document.getElementById('run');
+const clock  = document.getElementById('clock');
+const verdict= document.getElementById('verdict');
+let chosen  = null;
+let chosen2 = null;
+let mode    = 'incident';
+let lastResult = null;
+
+// Benchmark state
+let benchInterval = null;
+let benchStart = null;
+let cDone = false, gDone = false, cerebrasMs = null;
+
+// ---------------------------------------------------------------------------
+// Mode toggle
+// ---------------------------------------------------------------------------
+document.querySelectorAll('.mode-btn').forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    mode = btn.dataset.mode;
+    if (mode === 'support') {
+      drop.innerHTML = "Drop a customer's screenshot here<br>or click to choose";
+      document.getElementById('logbox').placeholder = "Optional: paste the customer's message or the error text.";
+      document.getElementById('panel-title').textContent = 'Customer ticket';
+    } else {
+      drop.innerHTML = "Drop an image or video here<br>or click to choose";
+      document.getElementById('logbox').placeholder = "Optional: paste a log excerpt, stack trace, or deploy note. Agents correlate it with the image to find root cause.";
+      document.getElementById('panel-title').textContent = 'Incident evidence';
+    }
+  };
+});
+
+// ---------------------------------------------------------------------------
+// File drop
+// ---------------------------------------------------------------------------
+drop.onclick = () => file.click();
+drop.ondragover  = e => { e.preventDefault(); drop.classList.add('over'); };
+drop.ondragleave = () => drop.classList.remove('over');
+drop.ondrop      = e => { e.preventDefault(); drop.classList.remove('over');
+  if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]); };
+file.onchange    = () => { if (file.files[0]) setFile(file.files[0]); };
+
+drop2.onclick = () => file2.click();
+drop2.ondragover  = e => { e.preventDefault(); drop2.classList.add('over'); };
+drop2.ondragleave = () => drop2.classList.remove('over');
+drop2.ondrop      = e => { e.preventDefault(); drop2.classList.remove('over');
+  if (e.dataTransfer.files[0]) setFile2(e.dataTransfer.files[0]); };
+file2.onchange   = () => { if (file2.files[0]) setFile2(file2.files[0]); };
+
+function setFile(f) {
+  chosen = f;
+  const isVideo = f.type.startsWith('video/') || /\.(mp4|mov|webm|avi|mkv)$/i.test(f.name);
+  if (isVideo) {
+    pimg.src = '';
+    preview.style.display = 'block';
+    pimg.parentElement === preview && (preview.innerHTML =
+      `<div style="padding:14px;text-align:center;color:var(--live);font-size:11px;letter-spacing:.5px">` +
+      `&#9654; ${escHtml(f.name)}<br><span style="color:var(--dim);font-size:10px">5 frames &middot; extracted at runtime</span></div>`);
+  } else {
+    preview.innerHTML = '<img id="pimg">';
+    document.getElementById('pimg').src = URL.createObjectURL(f);
+    preview.style.display = 'block';
+  }
+  runBtn.disabled = false;
+  drop.textContent = f.name;
+}
+
+function setFile2(f) {
+  chosen2 = f;
+  pimg2.src = URL.createObjectURL(f);
+  preview2.style.display = 'block';
+  drop2.textContent = f.name + ' (comparison)';
+}
+
+// ---------------------------------------------------------------------------
+// Stage helpers
+// ---------------------------------------------------------------------------
+function stageEl(name) { return document.querySelector(`.stage[data-stage="${name}"]`); }
+function setActive(name) {
+  document.querySelectorAll('.stage').forEach(s => s.classList.remove('active'));
+  const el = stageEl(name); if (el) el.classList.add('active');
+}
+function setDone(name) {
+  const el = stageEl(name);
+  if (el) { el.classList.remove('active'); el.classList.add('done'); }
+}
+function setMs(name, ms) {
+  const el = stageEl(name); if (el) el.querySelector('[data-ms]').textContent = ms + ' ms';
+}
+function setBody(name, html) {
+  const el = stageEl(name); if (el) el.querySelector('[data-body]').innerHTML = html;
+}
+
+function reset() {
+  document.querySelectorAll('.stage').forEach(s => {
+    s.classList.remove('active','done');
+    s.querySelector('[data-ms]').textContent = '';
+  });
+  setBody('triage','Reading evidence...');
+  setBody('retrieval','');
+  setBody('resolution','');
+  setBody('diagnostic','Only engaged when resolution is uncertain.');
+  verdict.className = 'verdict';
+  clock.textContent = '0';
+  document.getElementById('reply').className = 'reply';
+  document.getElementById('copy-btn').className = 'copy-btn';
+  document.getElementById('dl-btn').className = 'copy-btn';
+  document.getElementById('wire-section').className = 'wire-section';
+  document.getElementById('wire-log').innerHTML = '';
+  document.getElementById('webhook-status-inline').style.display = 'none';
+  lastResult = null;
+  // Reset benchmark columns so stale numbers from previous run don't linger
+  gDone = false; cerebrasMs = null;
+  document.getElementById('g-time').innerHTML = '—<span class="bench-unit"> ms</span>';
+  document.getElementById('g-time').className = 'bench-time';
+  document.getElementById('bench-g').className = 'bench-card';
+}
+
+function renderPlan(d) {
+  const steps = (d.action_plan || []).map((s,i) => `<div class="step"><b>${i+1}</b>${s}</div>`).join('');
+  const conf = `<span class="conf">confidence <b class="${d._rose?'up':'flat'}">${d.confidence}</b></span>`;
+  return `${conf}<div class="plan">${steps}</div><div class="rationale">${d.rationale||''}</div>`;
+}
+
+function copyResult() {
+  if (!lastResult) return;
+  navigator.clipboard.writeText(JSON.stringify(lastResult, null, 2));
+  const btn = document.getElementById('copy-btn');
+  btn.textContent = 'Copied!';
+  setTimeout(() => { btn.textContent = 'Copy result JSON'; }, 1500);
+}
+
+function downloadReport() {
+  if (!lastResult) return;
+  const t = lastResult.triage || {};
+  const r = lastResult.resolution || {};
+  const ts = new Date().toISOString();
+  const totalMs = document.getElementById('clock').textContent;
+  const lines = [
+    'TRIAGEFLOW INCIDENT REPORT',
+    '══════════════════════════════════════════════',
+    `Generated : ${ts}`,
+    `Model     : Gemma 4 31B on Cerebras Wafer-Scale Engine`,
+    `Pipeline  : ${totalMs} ms  (4 agents)`,
+    '',
+    'INCIDENT CLASSIFICATION',
+    `  Type     : ${t.incident_type || '—'}`,
+    `  Severity : ${(t.severity || '—').toUpperCase()}`,
+    `  Summary  : ${t.summary || '—'}`,
+    '',
+    'ACTION PLAN',
+    ...(r.action_plan || []).map((s, i) => `  ${i + 1}. ${s}`),
+    '',
+    'ROOT CAUSE / RATIONALE',
+    `  ${r.rationale || '—'}`,
+    '',
+    'CONFIDENCE',
+    `  ${r.confidence || '—'}`,
+    '',
+    '──────────────────────────────────────────────',
+    'Generated by TriageFlow · github.com/cerebras-hackathon',
+  ];
+  const blob = new Blob([lines.join('\n')], {type: 'text/plain'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `triageflow-${(t.incident_type || 'report').toLowerCase().replace(/\s+/g, '-')}-${Date.now()}.txt`;
+  a.click();
+}
+
+// ---------------------------------------------------------------------------
+// SSE wire renderer
+// ---------------------------------------------------------------------------
+function appendWire(d) {
+  const section = document.getElementById('wire-section');
+  section.classList.add('show');
+  const log = document.getElementById('wire-log');
+  const payloadStr = Array.isArray(d.payload)
+    ? d.payload.map(p => `<div>• ${escHtml(p)}</div>`).join('')
+    : `<div>${escHtml(d.payload)}</div>`;
+  log.insertAdjacentHTML('beforeend', `
+    <div class="wire-msg">
+      <span class="wire-route">${escHtml(d.from)} → ${escHtml(d.to)}</span>
+      <span class="wire-label">${escHtml(d.label)}</span>
+      <div class="wire-payload">${payloadStr}</div>
+      ${d.note ? `<div class="wire-note">${escHtml(d.note)}</div>` : ''}
+    </div>`);
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ---------------------------------------------------------------------------
+// Main triage run
+// ---------------------------------------------------------------------------
+runBtn.onclick = async () => {
+  if (!chosen) return;
+  reset();
+  runBtn.disabled = true;
+  const fd = new FormData();
+  fd.append('file', chosen);
+  if (chosen2) fd.append('file2', chosen2);
+  fd.append('log', document.getElementById('logbox').value || '');
+  fd.append('mode', mode);
+
+  const resp = await fetch('/triage', { method: 'POST', body: fd });
+  const reader = resp.body.getReader();
+  const dec = new TextDecoder();
+  let buf = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    const chunks = buf.split('\n\n'); buf = chunks.pop();
+    for (const chunk of chunks) {
+      const ev = chunk.match(/event: (.*)/)?.[1];
+      const raw = chunk.match(/data: (.*)/s)?.[1];
+      if (!ev || !raw) continue;
+      try { handle(ev, JSON.parse(raw)); } catch(_) {}
+    }
+  }
+  runBtn.disabled = false;
+  loadHistory();
+};
+
+function handle(ev, d) {
+  if (ev === 'status') {
+    setActive(d.stage.replace('2',''));
+
+  } else if (ev === 'triage') {
+    const t = d.data;
+    const logBadge = d.has_log ? ' <span class="pill" style="color:var(--beam);margin-left:6px">+ log</span>' : '';
+    const dualBadge = d.dual ? ' <span class="pill" style="color:var(--live);margin-left:6px">2 images</span>' : '';
+    const videoBadge = d.video ? ` <span class="pill" style="color:var(--warn);margin-left:6px">&#9654; ${d.frame_count} frames</span>` : '';
+    setBody('triage',
+      `<span class="pill sev-${t.severity}">${t.severity}</span> <span style="margin-left:6px">${escHtml(t.incident_type)}</span>${logBadge}${dualBadge}${videoBadge}` +
+      `<div style="margin-top:6px;color:var(--muted)">${escHtml(t.summary)}</div>` +
+      `<div style="margin-top:4px;color:var(--dim)">&rarr; retrieval: "${escHtml(t.retrieval_query)}"</div>`);
+    setMs('triage', d.ms); setDone('triage'); clock.textContent = d.total_ms;
+
+  } else if (ev === 'retrieval') {
+    const reasonHtml = d.reasoning
+      ? `<div style="margin-top:6px;color:var(--dim);font-size:11px;font-style:italic">${escHtml(d.reasoning)}</div>` : '';
+    setBody('retrieval',
+      (d.runbooks.map(r => `<div class="rb">${escHtml(r.title)}</div>`).join('')
+      || '<span style="color:var(--dim)">no relevant entries found</span>') + reasonHtml);
+    if (d.ms) setMs('retrieval', d.ms);
+    setDone('retrieval'); clock.textContent = d.total_ms;
+
+  } else if (ev === 'resolution') {
+    const data = d.data; data._rose = d.rose;
+    setBody('resolution', renderPlan(data));
+    setMs('resolution', d.ms); setDone('resolution'); clock.textContent = d.total_ms;
+    if (mode === 'support' && data.draft_reply && data.draft_reply.trim()) {
+      document.getElementById('reply').className = 'reply show';
+      document.getElementById('replytxt').textContent = data.draft_reply;
+    }
+    if (d.pass === 2) {
+      if (d.rose) {
+        verdict.className = 'verdict show rose';
+        verdict.innerHTML = `Confidence rose ${d.old_conf} &rarr; ${d.new_conf}. Diagnostic re-examination surfaced new evidence.`;
+      } else {
+        verdict.className = 'verdict show flat';
+        verdict.innerHTML = `Confidence held at ${d.new_conf}. Diagnostic couldn't confirm from image — system stays honest.`;
+      }
+    }
+
+  } else if (ev === 'loop_questions') {
+    setActive('diagnostic');
+    setBody('diagnostic', d.questions.map(q => `<div class="qa"><div class="q">Q: ${escHtml(q)}</div></div>`).join(''));
+
+  } else if (ev === 'diagnostic') {
+    setBody('diagnostic', d.answers.map(a =>
+      `<div class="qa"><div class="q">Q: ${escHtml(a.question)}</div><div class="a">A: ${escHtml(a.answer)}</div></div>`
+    ).join(''));
+    setMs('diagnostic', d.ms); setDone('diagnostic'); clock.textContent = d.total_ms;
+
+  } else if (ev === 'wire') {
+    appendWire(d);
+
+  } else if (ev === 'webhook') {
+    const el = document.getElementById('webhook-status-inline');
+    el.style.display = 'block';
+    if (d.ok) {
+      el.style.color = 'var(--live)';
+      el.textContent = `webhook fired → ${d.url}`;
+    } else {
+      el.style.color = 'var(--crit)';
+      el.textContent = `webhook failed: ${d.error || 'unknown error'}`;
+    }
+
+  } else if (ev === 'done') {
+    clock.textContent = d.total_ms;
+    lastResult = d.result;
+    document.getElementById('copy-btn').classList.add('show');
+    document.getElementById('dl-btn').classList.add('show');
+    // Auto-populate benchmark Cerebras column with actual pipeline time
+    cDone = true;
+    cerebrasMs = d.total_ms;
+    clearInterval(benchInterval);
+    document.getElementById('c-time').innerHTML = `${d.total_ms}<span class="bench-unit"> ms</span>`;
+    document.getElementById('c-time').className = 'bench-time done-c';
+    document.getElementById('bench-c').className = 'bench-card done-c';
+    document.getElementById('c-tag').textContent = '4-agent pipeline · actual run';
+
+  } else if (ev === 'bench_gpu') {
+    handleBench('bench_gpu', d);
+
+  } else if (ev === 'error') {
+    verdict.className = 'verdict show flat';
+    verdict.textContent = d.message || 'Something went wrong. Please try again.';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Benchmark
+// ---------------------------------------------------------------------------
+async function runBenchmark() {
+  const btn = document.getElementById('bench-btn');
+  btn.disabled = true;
+  cDone = false; gDone = false;
+
+  // Reset display
+  document.getElementById('c-time').innerHTML = '0<span class="bench-unit"> ms</span>';
+  document.getElementById('g-time').innerHTML = '0<span class="bench-unit"> ms</span>';
+  document.getElementById('c-time').className = 'bench-time';
+  document.getElementById('g-time').className = 'bench-time';
+  document.getElementById('bench-c').className = 'bench-card';
+  document.getElementById('bench-g').className = 'bench-card';
+  document.getElementById('c-tag').textContent = 'running...';
+  document.getElementById('g-tag').textContent = 'running...';
+  document.getElementById('bench-speedup').style.display = 'none';
+
+  benchStart = performance.now();
+  benchInterval = setInterval(() => {
+    const e = Math.round(performance.now() - benchStart);
+    if (!cDone) document.getElementById('c-time').innerHTML = `${e}<span class="bench-unit"> ms</span>`;
+    if (!gDone) document.getElementById('g-time').innerHTML = `${e}<span class="bench-unit"> ms</span>`;
+  }, 40);
+
+  const resp = await fetch('/benchmark', { method: 'POST' });
+  const reader = resp.body.getReader();
+  const dec = new TextDecoder();
+  let buf = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    const chunks = buf.split('\n\n'); buf = chunks.pop();
+    for (const chunk of chunks) {
+      const ev = chunk.match(/event: (.*)/)?.[1];
+      const raw = chunk.match(/data: (.*)/s)?.[1];
+      if (!ev || !raw) continue;
+      try { handleBench(ev, JSON.parse(raw)); } catch(_) {}
+    }
+  }
+
+  clearInterval(benchInterval);
+  btn.disabled = false;
+}
+
+function handleBench(ev, d) {
+  if (ev === 'bench_cerebras') {
+    cDone = true;
+    document.getElementById('c-time').innerHTML = `${d.ms}<span class="bench-unit"> ms</span>`;
+    document.getElementById('c-time').className = 'bench-time done-c';
+    document.getElementById('bench-c').className = 'bench-card done-c';
+    document.getElementById('c-tag').textContent = `done  ·  ${d.tokens || '?'} tokens`;
+
+  } else if (ev === 'bench_gpu') {
+    gDone = true;
+    document.getElementById('g-time').innerHTML = `${d.ms}<span class="bench-unit"> ms</span>`;
+    document.getElementById('g-time').className = 'bench-time done-g';
+    document.getElementById('bench-g').className = 'bench-card done-g';
+    document.getElementById('g-tag').textContent = d.estimated ? 'estimated' : (d.error ? 'error — check server logs' : 'done · live');
+    if (d.label) {
+      const parts = d.label.split(' · ');
+      document.getElementById('g-name').childNodes[0].textContent = parts[0] || d.label;
+      document.getElementById('g-sub').textContent = parts.slice(1).join(' · ') || d.label;
+      const providerName = (d.label || 'GPU provider').split(' · ')[0];
+      document.getElementById('speedup-label').textContent = `Cerebras · Gemma 4 31B  vs  ${providerName}`;
+    }
+    // Show speedup when we have both times (pipeline auto-populates cerebrasMs)
+    if (!d.error && cerebrasMs && d.ms > 0) {
+      const speedup = Math.round((d.ms / cerebrasMs) * 10) / 10;
+      document.getElementById('speedup-val').textContent = speedup;
+      document.getElementById('speedup-note').textContent =
+        'Both started simultaneously. Cerebras: 4-agent multimodal pipeline. GPU: 4 equivalent sequential calls, same workload.';
+      document.getElementById('bench-speedup').style.display = 'block';
+    }
+
+  } else if (ev === 'bench_done') {
+    clearInterval(benchInterval);
+    if (!gDone) {
+      // No GPU comparison — freeze GPU column cleanly
+      document.getElementById('g-time').innerHTML = `—<span class="bench-unit"> ms</span>`;
+      document.getElementById('g-tag').textContent = 'Set TOGETHER_API_KEY to compare live';
+      gDone = true;
+    }
+    if (d.gpu_ms) {
+      document.getElementById('speedup-val').textContent = d.speedup;
+      document.getElementById('speedup-note').textContent =
+        'Both started simultaneously. Cerebras: 4-agent multimodal pipeline. GPU: 4 equivalent sequential calls, same workload.';
+      document.getElementById('bench-speedup').style.display = 'block';
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Accordion
+// ---------------------------------------------------------------------------
+function toggleAcc(id) {
+  const body = document.getElementById(`acc-${id}-body`);
+  const icon = document.getElementById(`acc-${id}-icon`);
+  const open = body.classList.toggle('open');
+  icon.textContent = open ? '▼' : '▶';
+  if (open) {
+    if (id === 'history') loadHistory();
+    if (id === 'settings') { loadSettings(); loadKb(); }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Webhook settings
+// ---------------------------------------------------------------------------
+async function loadSettings() {
+  const r = await fetch('/settings');
+  const d = await r.json();
+  document.getElementById('wh-url').value = d.webhook_url || '';
+  if (d.has_together_key && d.gpu_label) {
+    document.getElementById('g-sub').textContent = d.gpu_label + ' · live comparison';
+  }
+}
+
+async function saveWebhook() {
+  const url = document.getElementById('wh-url').value.trim();
+  const r = await fetch('/settings', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({webhook_url: url}),
+  });
+  const d = await r.json();
+  const el = document.getElementById('wh-status');
+  el.className = d.ok ? 'status-line ok' : 'status-line err';
+  el.textContent = d.ok ? 'Webhook URL saved.' : 'Save failed.';
+}
+
+async function testWebhook() {
+  const url = document.getElementById('wh-url').value.trim();
+  const el = document.getElementById('wh-status');
+  el.className = 'status-line'; el.textContent = 'Testing...';
+  const r = await fetch('/settings/test-webhook', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({webhook_url: url}),
+  });
+  const d = await r.json();
+  el.className = d.ok ? 'status-line ok' : 'status-line err';
+  el.textContent = d.ok ? 'Webhook test succeeded.' : `Test failed: ${d.error}`;
+}
+
+async function clearWebhook() {
+  document.getElementById('wh-url').value = '';
+  await fetch('/settings', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({webhook_url: ''}),
+  });
+  document.getElementById('wh-status').textContent = '';
+}
+
+// ---------------------------------------------------------------------------
+// Custom KB
+// ---------------------------------------------------------------------------
+async function loadKb() {
+  const r = await fetch('/kb');
+  const entries = await r.json();
+  const el = document.getElementById('kb-list');
+  if (!entries.length) { el.innerHTML = '<div class="hist-empty">No custom entries yet.</div>'; return; }
+  el.innerHTML = entries.map(e => `
+    <div class="kb-entry">
+      <div style="flex:1">
+        <div class="kb-title">${escHtml(e.title)}</div>
+        <div class="kb-kws">${e.keywords.join(', ')}</div>
+      </div>
+      <button class="kb-del" onclick="deleteKb('${e.key}')" title="Delete">✕</button>
+    </div>`).join('');
+}
+
+function toggleKbForm() {
+  const f = document.getElementById('kb-form');
+  f.classList.toggle('show');
+}
+
+async function addKbEntry() {
+  const title = document.getElementById('kb-title').value.trim();
+  const kwStr = document.getElementById('kb-keywords').value.trim();
+  const content = document.getElementById('kb-content').value.trim();
+  if (!title || !kwStr || !content) return;
+  const keywords = kwStr.split(',').map(s => s.trim()).filter(Boolean);
+  await fetch('/kb', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({title, keywords, content}),
+  });
+  document.getElementById('kb-title').value = '';
+  document.getElementById('kb-keywords').value = '';
+  document.getElementById('kb-content').value = '';
+  document.getElementById('kb-form').classList.remove('show');
+  loadKb();
+}
+
+async function deleteKb(key) {
+  await fetch(`/kb/${encodeURIComponent(key)}`, {method: 'DELETE'});
+  loadKb();
+}
+
+// ---------------------------------------------------------------------------
+// History
+// ---------------------------------------------------------------------------
+async function loadHistory() {
+  const r = await fetch('/history');
+  const rows = await r.json();
+  const el = document.getElementById('history-content');
+  if (!rows.length) { el.innerHTML = '<div class="hist-empty">No history yet.</div>'; return; }
+
+  const sev = s => {
+    const cls = s === 'critical' || s === 'high' ? 'var(--crit)' :
+                s === 'medium' ? 'var(--warn)' : 'var(--live)';
+    return `<span style="color:${cls}">${s}</span>`;
+  };
+  const relTime = ts => {
+    const d = Math.round(Date.now()/1000 - ts);
+    if (d < 60) return d + 's ago';
+    if (d < 3600) return Math.round(d/60) + 'm ago';
+    if (d < 86400) return Math.round(d/3600) + 'h ago';
+    return Math.round(d/86400) + 'd ago';
+  };
+
+  el.innerHTML = `<table class="hist-table">
+    <thead><tr><th>When</th><th>Mode</th><th>Type</th><th>Sev</th><th>Conf</th><th>ms</th></tr></thead>
+    <tbody>${rows.map(r => `<tr>
+      <td>${relTime(r.ts)}</td>
+      <td><span style="color:var(--beam)">${r.mode}</span></td>
+      <td>${escHtml(r.incident_type || '—')}</td>
+      <td>${sev(r.severity || '—')}</td>
+      <td>${r.confidence || '—'}</td>
+      <td class="hist-ms">${r.total_ms}</td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+}
+
+async function clearHistory() {
+  if (!confirm('Clear all triage history?')) return;
+  await fetch('/history', {method: 'DELETE'});
+  document.getElementById('history-content').innerHTML = '<div class="hist-empty">History cleared.</div>';
+}
+
+// ---------------------------------------------------------------------------
+// Demo scenarios
+// ---------------------------------------------------------------------------
+async function loadDemoScenarios() {
+  try {
+    const r = await fetch('/demo-scenarios');
+    const scenarios = await r.json();
+    const list = document.getElementById('demo-list');
+    if (!list || !scenarios.length) return;
+    scenarios.forEach(s => {
+      const btn = document.createElement('button');
+      btn.className = 'mode-btn';
+      btn.style.cssText = 'text-align:left;padding:8px 10px;font-size:10px;line-height:1.4';
+      btn.innerHTML = `<span style="color:var(--ink)">${escHtml(s.title)}</span><br><span style="color:var(--dim)">${escHtml(s.desc)}</span>`;
+      btn.onclick = () => loadDemo(s.img1, s.img2, s.log || '');
+      list.appendChild(btn);
+    });
+  } catch(_) {}
+}
+
+async function loadDemo(img1Url, img2Url, logText) {
+  try {
+    const r1 = await fetch(img1Url);
+    const blob1 = await r1.blob();
+    const f1 = new File([blob1], img1Url.split('/').pop(), {type: blob1.type || 'image/jpeg'});
+    setFile(f1);
+    if (img2Url) {
+      const r2 = await fetch(img2Url);
+      const blob2 = await r2.blob();
+      const f2 = new File([blob2], img2Url.split('/').pop(), {type: blob2.type || 'image/jpeg'});
+      setFile2(f2);
+    }
+    if (logText) document.getElementById('logbox').value = logText;
+  } catch(e) { console.error('Demo load failed', e); }
+}
+
+// ---------------------------------------------------------------------------
+// Init
+// ---------------------------------------------------------------------------
+(async () => {
+  // Pre-load settings to update benchmark label if TOGETHER_API_KEY is set
+  try {
+    const r = await fetch('/settings');
+    const d = await r.json();
+    if (d.has_together_key && d.gpu_label) {
+      document.getElementById('g-sub').textContent = d.gpu_label + ' · live comparison ready';
+    }
+    if (d.webhook_url) {
+      // silently hydrate the webhook field
+      document.getElementById('wh-url').value = d.webhook_url;
+    }
+  } catch(_) {}
+  loadDemoScenarios();
+})();
+
+
+</script>
+</body>
+</html>
