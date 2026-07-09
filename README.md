@@ -1,6 +1,6 @@
 # TriageFlow
 
-> **Multimodal multi-agent incident triage on Gemma 4 31B, built in 24 hours.**
+**Multimodal multi-agent incident triage on Gemma 4 31B, built in 24 hours.**
 
 Upload a Grafana screenshot, a before/after image pair, or an MP4 video. Four coordinated AI agents classify the incident, pull the right runbooks, produce a ranked action plan, and fire a diagnostic re-examination when confidence is low. The full 4-agent pipeline completes in **~400ms**, powered by the **Cerebras Wafer-Scale Engine**.
 
@@ -31,7 +31,16 @@ Running the same 4-agent pipeline on GPU (Groq Llama 3.3-70B) vs Cerebras (Gemma
 
 ### Multimodal 4-agent pipeline
 
-<img src="demo_images/Flowchart_system_design.png" width="400" />
+```mermaid
+flowchart LR
+    A([Upload\nImage / Video / Dual Image]) --> B[Triage Agent\nVision\nClassify type & severity]
+    B --> C[Retrieval Agent\nGemma Semantic\nRetrieve runbooks]
+    C --> D[Resolution Agent\nVision + Text\nAction plan + confidence]
+    D -->|High Confidence| E([Done])
+    D -->|Low Confidence| F[Diagnostic Agent\nVision\nRe-examine & answer]
+    F --> G[Resolution Agent\nPass 2\nRe-synthesize]
+    G --> E
+```
 
 All four agents run on **Gemma 4 31B** via the Cerebras API. Vision agents receive the raw image alongside text context so the model sees exactly what the on-call SRE sees.
 
