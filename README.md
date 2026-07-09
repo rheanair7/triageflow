@@ -1,16 +1,16 @@
 # TriageFlow
 
-> **Multimodal multi-agent incident triage on Gemma 4 31B — built in 24 hours.**
+> **Multimodal multi-agent incident triage on Gemma 4 31B, built in 24 hours.**
 
-Upload a Grafana screenshot, a before/after image pair, or an MP4 video. Four coordinated AI agents classify the incident, pull the right runbooks, produce a ranked action plan, and fire a diagnostic re-examination when confidence is low. The full 4-agent pipeline completes in **~400ms** — powered by the **Cerebras Wafer-Scale Engine**.
+Upload a Grafana screenshot, a before/after image pair, or an MP4 video. Four coordinated AI agents classify the incident, pull the right runbooks, produce a ranked action plan, and fire a diagnostic re-examination when confidence is low. The full 4-agent pipeline completes in **~400ms**, powered by the **Cerebras Wafer-Scale Engine**.
 
-Built for the [Cerebras + Google DeepMind Gemma 4 Hackathon](https://cerebras.ai) — **Track 1 (Multiverse Agents)** and **Track 3 (Enterprise Impact)**.
+Built for the [Cerebras + Google DeepMind Gemma 4 Hackathon](https://cerebras.ai) -- **Track 1 (Multiverse Agents)** and **Track 3 (Enterprise Impact)**.
 
 ---
 
 ## Demo
 
-https://github.com/rheanair7/cerebras_hackathon/raw/main/demo_images/Demo_Video.mp4
+[![TriageFlow Demo](https://img.youtube.com/vi/9rWk5kLPA_w/maxresdefault.jpg)](https://youtu.be/9rWk5kLPA_w)
 
 ---
 
@@ -23,69 +23,59 @@ Running the same 4-agent pipeline on GPU (Groq Llama 3.3-70B) vs Cerebras (Gemma
 | **Cerebras WSE** | ~400 ms |
 | GPU (Groq) | ~4,200 ms |
 
-**10.4× faster end-to-end.** The Cerebras speed is what makes the confidence loop practical — firing a second diagnostic pass costs milliseconds, not seconds. The benchmark runs live in the app alongside every triage.
+**10.4x faster end-to-end.** The Cerebras speed is what makes the confidence loop practical. Firing a second diagnostic pass costs milliseconds, not seconds. The benchmark runs live in the app alongside every triage.
 
 ---
 
 ## What Was Built in 24 Hours
 
 ### Multimodal 4-agent pipeline
-```
-Upload (image / video / dual image)
-    │
-    ▼
-Triage Agent ──────── vision · classify incident type + severity
-    │
-    ▼
-Retrieval Agent ───── Gemma semantic · select relevant runbooks
-    │
-    ▼
-Resolution Agent ──── vision + text · action plan + confidence score
-    │
-    ├─── confidence = HIGH ──► Done
-    │
-    └─── confidence < HIGH
-              │
-              ▼
-         Diagnostic Agent ── vision · re-examine image, answer questions
-              │
-              ▼
-         Resolution Agent (pass 2) ── re-synthesize with findings
-```
 
-All four agents run on **Gemma 4 31B** via the Cerebras API. Vision agents receive the raw image alongside text context — the model sees exactly what the on-call SRE sees.
+![System Design](demo_images/Flowchart_system_design.png)
 
-### Agent Wire — live inter-agent messaging
+All four agents run on **Gemma 4 31B** via the Cerebras API. Vision agents receive the raw image alongside text context so the model sees exactly what the on-call SRE sees.
+
+### Agent Wire: live inter-agent messaging
 Every message passed between agents streams to the UI in real time over SSE. You watch agents hand off context to each other as the pipeline runs.
 
 ### Video triage
-Upload an MP4 screen recording of a production incident. OpenCV extracts 5 representative frames; the vision agents process the temporal sequence as a multimodal input.
+Upload an MP4 screen recording of a production incident. OpenCV extracts 5 representative frames and the vision agents process the temporal sequence as a multimodal input.
 
 ### Confidence loop
-The resolution agent scores its own certainty. If it isn't confident, it automatically spins up the diagnostic agent to re-examine the image and answer targeted questions, then re-synthesizes a final plan. Zero human intervention needed.
+The resolution agent scores its own certainty. If it is not confident, it automatically spins up the diagnostic agent to re-examine the image and answer targeted questions, then re-synthesizes a final plan. Zero human intervention needed.
 
 ### Custom knowledge base
-Add and remove runbooks via the UI. The retrieval agent reasons over them semantically using Gemma — not keyword matching. Persisted in SQLite.
+Add and remove runbooks via the UI. The retrieval agent reasons over them semantically using Gemma, not keyword matching. Persisted in SQLite.
 
 ### Live GPU benchmark
 Every triage fires a parallel Groq request with the same prompt. When both finish, the UI auto-populates the speed comparison. Real numbers, not synthetic benchmarks.
 
 ---
 
+## What I Would Build With More Time
+
+- **Auto-remediation actions.** The pipeline currently produces an action plan for a human to execute. The next step is giving agents tool access (kubectl, AWS SDK, PagerDuty API) so they can execute low-risk remediations automatically and escalate only the high-risk ones.
+
+- **Vector-based runbook retrieval.** The retrieval agent currently reasons over the full KB as text. Embedding runbooks into a vector store would let retrieval scale to thousands of documents without blowing the context window, and would improve precision on large KBs.
+
+- **Evaluation framework.** There is no ground truth scoring yet. A labeled dataset of incidents with known root causes would let me measure classification accuracy, retrieval precision, and confidence loop trigger rate so improvements can actually be quantified.
+
+---
+
 ## Features at a Glance
 
-- **Multimodal inputs** — single image, before/after dual image, or video (5 frames extracted)
-- **Gemma semantic retrieval** — model reasons over runbooks rather than keyword matching
-- **Confidence loop** — auto-triggers diagnostic re-examination when uncertain
-- **Agent Wire** — live SSE stream of inter-agent message passing
-- **Speed benchmark** — GPU comparison runs in parallel with every triage
-- **Custom knowledge base** — add/remove runbooks via UI, persisted in SQLite
-- **Triage history** — full audit log of every run
-- **Webhook / Slack integration** — fires on every triage completion
-- **Incident report download** — `.txt` artifact with action plan and root cause
-- **Docker deployment** — one-command deploy with `docker-compose up`
-- **API key auth** — optional `X-API-Key` middleware
-- **Health check** — `GET /health` with model, DB, and GPU provider status
+- **Multimodal inputs** -- single image, before/after dual image, or video (5 frames extracted)
+- **Gemma semantic retrieval** -- model reasons over runbooks rather than keyword matching
+- **Confidence loop** -- auto-triggers diagnostic re-examination when uncertain
+- **Agent Wire** -- live SSE stream of inter-agent message passing
+- **Speed benchmark** -- GPU comparison runs in parallel with every triage
+- **Custom knowledge base** -- add/remove runbooks via UI, persisted in SQLite
+- **Triage history** -- full audit log of every run
+- **Webhook / Slack integration** -- fires on every triage completion
+- **Incident report download** -- `.txt` artifact with action plan and root cause
+- **Docker deployment** -- one-command deploy with `docker-compose up`
+- **API key auth** -- optional `X-API-Key` middleware
+- **Health check** -- `GET /health` with model, DB, and GPU provider status
 
 ---
 
@@ -105,7 +95,7 @@ pip install -r requirements.txt
 pip install opencv-python    # for video support
 
 set CEREBRAS_API_KEY=your_key_here
-set GROQ_API_KEY=your_groq_key_here   # optional — enables GPU benchmark
+set GROQ_API_KEY=your_groq_key_here   # optional, enables GPU benchmark
 
 uvicorn backend:app --port 8000
 ```
@@ -129,7 +119,7 @@ Open http://localhost:8000
 
 | Variable | Required | Description |
 |---|---|---|
-| `CEREBRAS_API_KEY` | Yes | Cerebras API key — get one at [cerebras.ai](https://cerebras.ai) |
+| `CEREBRAS_API_KEY` | Yes | Cerebras API key, get one at [cerebras.ai](https://cerebras.ai) |
 | `GROQ_API_KEY` | No | Enables live GPU benchmark (free at [console.groq.com](https://console.groq.com)) |
 | `FIREWORKS_API_KEY` | No | Alternative GPU provider for benchmark |
 | `TOGETHER_API_KEY` | No | Alternative GPU provider for benchmark |
@@ -179,7 +169,7 @@ cerebras_hackathon/
 ├── requirements.txt
 ├── Dockerfile
 ├── docker-compose.yml
-├── demo_images/         # Test images + demo video
+├── demo_images/         # Test images + system design + demo video
 ├── .env.example
 └── README.md
 ```
