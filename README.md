@@ -31,7 +31,7 @@ Running the same 4-agent pipeline on GPU (Groq Llama 3.3-70B) vs Cerebras (Gemma
 
 ### Multimodal 4-agent pipeline
 
-<img src="demo_images/Flowchart_system_design.png" width="200" />
+<img src="demo_images/Flowchart_system_design.png" width="300" />
 
 All four agents run on **Gemma 4 31B** via the Cerebras API. Vision agents receive the raw image alongside text context so the model sees exactly what the on-call SRE sees.
 
