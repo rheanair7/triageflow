@@ -1,23 +1,35 @@
 # TriageFlow
 
-Multimodal multi-agent incident triage powered by **Gemma 4 31B** on the **Cerebras Wafer-Scale Engine**.
+> **Multimodal multi-agent incident triage on Gemma 4 31B — built in 24 hours.**
 
-Upload a dashboard screenshot, Grafana chart, before/after image pair, or an MP4 video — four coordinated agents classify the incident, retrieve relevant runbooks, produce a ranked action plan, and run a confidence loop that fires a diagnostic re-examination when needed. Full 4-agent pipeline completes in **~400ms**.
+Upload a Grafana screenshot, a before/after image pair, or an MP4 video. Four coordinated AI agents classify the incident, pull the right runbooks, produce a ranked action plan, and fire a diagnostic re-examination when confidence is low. The full 4-agent pipeline completes in **~400ms** — powered by the **Cerebras Wafer-Scale Engine**.
 
-Built for the [Cerebras + Google DeepMind Gemma 4 Hackathon](https://cerebras.ai) — Track 1 (Multiverse Agents) and Track 3 (Enterprise Impact).
+Built for the [Cerebras + Google DeepMind Gemma 4 Hackathon](https://cerebras.ai) — **Track 1 (Multiverse Agents)** and **Track 3 (Enterprise Impact)**.
 
 ---
 
 ## Demo
 
-Open http://localhost:8000 to see the live UI with the SVG architecture diagram.
-
-**10.4× faster** than GPU on the same 4-agent workload (Cerebras Gemma 4 31B vs Groq Llama 3.3-70B, measured simultaneously).
+https://github.com/rheanair7/cerebras_hackathon/raw/main/demo_images/Demo_Video.mp4
 
 ---
 
-## Agent Pipeline
+## Why Cerebras
 
+Running the same 4-agent pipeline on GPU (Groq Llama 3.3-70B) vs Cerebras (Gemma 4 31B):
+
+| Provider | Pipeline latency |
+|---|---|
+| **Cerebras WSE** | ~400 ms |
+| GPU (Groq) | ~4,200 ms |
+
+**10.4× faster end-to-end.** The Cerebras speed is what makes the confidence loop practical — firing a second diagnostic pass costs milliseconds, not seconds. The benchmark runs live in the app alongside every triage.
+
+---
+
+## What Was Built in 24 Hours
+
+### Multimodal 4-agent pipeline
 ```
 Upload (image / video / dual image)
     │
@@ -41,17 +53,32 @@ Resolution Agent ──── vision + text · action plan + confidence score
          Resolution Agent (pass 2) ── re-synthesize with findings
 ```
 
-All four agents run on **Gemma 4 31B** via the Cerebras API. Vision agents receive the image alongside text context — the model sees what the SRE sees.
+All four agents run on **Gemma 4 31B** via the Cerebras API. Vision agents receive the raw image alongside text context — the model sees exactly what the on-call SRE sees.
+
+### Agent Wire — live inter-agent messaging
+Every message passed between agents streams to the UI in real time over SSE. You watch agents hand off context to each other as the pipeline runs.
+
+### Video triage
+Upload an MP4 screen recording of a production incident. OpenCV extracts 5 representative frames; the vision agents process the temporal sequence as a multimodal input.
+
+### Confidence loop
+The resolution agent scores its own certainty. If it isn't confident, it automatically spins up the diagnostic agent to re-examine the image and answer targeted questions, then re-synthesizes a final plan. Zero human intervention needed.
+
+### Custom knowledge base
+Add and remove runbooks via the UI. The retrieval agent reasons over them semantically using Gemma — not keyword matching. Persisted in SQLite.
+
+### Live GPU benchmark
+Every triage fires a parallel Groq request with the same prompt. When both finish, the UI auto-populates the speed comparison. Real numbers, not synthetic benchmarks.
 
 ---
 
-## Features
+## Features at a Glance
 
-- **Multimodal inputs** — single image, dual image (before/after), or video (5 frames extracted)
-- **Gemma semantic retrieval** — retrieval agent reasons over the KB rather than keyword matching
-- **Confidence loop** — resolution agent requests diagnostic re-examination when uncertain
-- **Agent Wire** — live SSE stream showing inter-agent message passing in real time
-- **Speed benchmark** — GPU comparison runs in parallel with every triage, auto-populates result
+- **Multimodal inputs** — single image, before/after dual image, or video (5 frames extracted)
+- **Gemma semantic retrieval** — model reasons over runbooks rather than keyword matching
+- **Confidence loop** — auto-triggers diagnostic re-examination when uncertain
+- **Agent Wire** — live SSE stream of inter-agent message passing
+- **Speed benchmark** — GPU comparison runs in parallel with every triage
 - **Custom knowledge base** — add/remove runbooks via UI, persisted in SQLite
 - **Triage history** — full audit log of every run
 - **Webhook / Slack integration** — fires on every triage completion
@@ -67,8 +94,8 @@ All four agents run on **Gemma 4 31B** via the Cerebras API. Vision agents recei
 ### Local
 
 ```bash
-git clone https://github.com/your-username/triageflow.git
-cd triageflow
+git clone https://github.com/rheanair7/cerebras_hackathon.git
+cd cerebras_hackathon
 
 python -m venv venv
 venv\Scripts\activate        # Windows
@@ -132,25 +159,27 @@ Open http://localhost:8000
 
 ## Stack
 
-- **Model** — Gemma 4 31B (`gemma-4-31b`) via Cerebras API
-- **Backend** — FastAPI + Server-Sent Events
-- **Storage** — SQLite (audit log, custom KB, settings)
-- **Video** — OpenCV frame extraction
-- **GPU benchmark** — OpenAI-compatible clients (Groq / Fireworks / Together AI)
-- **Frontend** — single-file HTML/CSS/JS, no build step
+| Layer | Technology |
+|---|---|
+| Model | Gemma 4 31B (`gemma-4-31b`) via Cerebras API |
+| Backend | FastAPI + Server-Sent Events |
+| Storage | SQLite (audit log, custom KB, settings) |
+| Video | OpenCV frame extraction |
+| GPU benchmark | OpenAI-compatible clients (Groq / Fireworks / Together AI) |
+| Frontend | Single-file HTML/CSS/JS, no build step |
 
 ---
 
 ## Project Structure
 
 ```
-triageflow/
+cerebras_hackathon/
 ├── backend.py           # FastAPI app, all 4 agents, SSE pipeline
 ├── index.html           # Single-file UI
 ├── requirements.txt
 ├── Dockerfile
 ├── docker-compose.yml
-├── demo_images/         # Test images for demo mode
+├── demo_images/         # Test images + demo video
 ├── .env.example
 └── README.md
 ```
